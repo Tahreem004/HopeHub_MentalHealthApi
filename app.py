@@ -20,6 +20,10 @@ def classify():
     return jsonify({"mental_health_related": result})
 
 @app.route("/respond", methods=["POST"])
+@app.route("/")
+def index():
+    return "Hello, world!"
+
 def respond():
     data = request.json
     urdu_text = data.get("text", "")
