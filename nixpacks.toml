@@ -1,2 +1,6 @@
 [phases.setup]
-nixPkgs = ["libuuid"]
+nixPkgs = ["python312", "libuuid"]
+
+[phases.install]
+cmds = ["pip install -r requirements.txt"]
+
