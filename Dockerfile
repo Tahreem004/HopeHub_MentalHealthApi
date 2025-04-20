@@ -7,15 +7,11 @@ WORKDIR /app
 # Copy the current directory contents into the container at /app
 COPY . /app
 
-# Install any needed dependencies
-RUN pip install -r requirements.txt
+# Install dependencies
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Make port 5000 available to the world outside the container
+# Expose port 5000
 EXPOSE 5000
 
-# Define environment variable
-ENV FLASK_APP=app.py
-
-# Run app.py when the container launches
-CMD ["python", "app.py"]
-
+# Use Gunicorn for production server
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "app:app"]
