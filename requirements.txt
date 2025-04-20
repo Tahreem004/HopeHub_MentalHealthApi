@@ -1,7 +1,9 @@
-
 Flask
 requests
 python-dotenv
 deep-translator
 SpeechRecognition
 azure-cognitiveservices-speech
+openai
+googletrans==4.0.0rc1
+
