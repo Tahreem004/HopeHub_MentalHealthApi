@@ -20,9 +20,6 @@ def classify():
     return jsonify({"mental_health_related": result})
 
 @app.route("/respond", methods=["POST"])
-@app.route("/")
-def index():
-    return "Hello, world!"
 
 def respond():
     data = request.json
@@ -39,7 +36,9 @@ def respond():
         return send_file(audio_file, mimetype="audio/mpeg", as_attachment=True)
     else:
         return jsonify({"error": "Failed to generate audio"}), 500
-
+@app.route("/")
+def index():
+    return "Hello, world!"
 
 
 if __name__ == "__main__":
