@@ -1,4 +1,7 @@
+
 Flask
 requests
+python-dotenv
 deep-translator
+SpeechRecognition
 azure-cognitiveservices-speech

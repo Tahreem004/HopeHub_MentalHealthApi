@@ -1,30 +1,24 @@
 # -*- coding: utf-8 -*-
 """
-Created on Fri Apr 18 22:40:07 2025
+Created on Sun Apr 20 16:28:08 2025
 
 @author: tehre
 """
 
-from flask import Flask, request, jsonify
-import uuid
 import os
+import uuid
 import requests
-from deep_translator import GoogleTranslator
 import azure.cognitiveservices.speech as speechsdk
+from deep_translator import GoogleTranslator
 
-# ==== Flask Setup ====
-app = Flask(__name__)
-
-# ==== OpenRouter & Azure Keys ====
-OPENROUTER_API_KEY = "sk-or-..."  # REDACT FOR PRODUCTION
+# Load API keys from environment variables
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+AZURE_TTS_KEY_1 = os.getenv("AZURE_TTS_KEY_1")
+AZURE_TRANSLATOR_KEY = os.getenv("AZURE_TRANSLATOR_KEY")
+AZURE_REGION = os.getenv("AZURE_REGION")
+AZURE_TRANSLATOR_REGION = os.getenv("AZURE_TRANSLATOR_REGION")
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-AZURE_TTS_KEY_1 = "..."  # REDACT
-AZURE_TRANSLATOR_KEY = "..."
-AZURE_REGION = "southeastasia"
-AZURE_TRANSLATOR_REGION = "southeastasia"
 translator_endpoint = "https://api.cognitive.microsofttranslator.com"
-
-# ==== Helpers ====
 
 def translate_urdu_to_english(text):
     try:
@@ -70,14 +64,13 @@ def is_query_mental_health_related(text):
         print(f"Classifier Exception: {e}")
         return False
 
-def generate_response_melogpt(english_text):
+def generate_response(english_text):
     headers = {
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
         "Content-Type": "application/json",
         "HTTP-Referer": "http://localhost",
         "X-Title": "MentalHealthBot"
     }
-
     payload = {
         "model": "deepseek/deepseek-r1:free",
         "messages": [
@@ -98,11 +91,11 @@ def generate_response_melogpt(english_text):
 
 def azure_tts_urdu(text):
     try:
-        translated_urdu = translate_english_to_urdu(text)
+        urdu_text = translate_english_to_urdu(text)
         ssml = f"""
         <speak version='1.0' xml:lang='ur-PK'>
             <voice xml:lang='ur-PK' xml:gender='Male' name='ur-PK-AsadNeural'>
-                {translated_urdu}
+                {urdu_text}
             </voice>
         </speak>
         """
@@ -114,8 +107,9 @@ def azure_tts_urdu(text):
             "User-Agent": "UrduMentalHealthBot"
         }
         response = requests.post(tts_url, headers=headers, data=ssml.encode("utf-8"))
+
         if response.status_code == 200:
-            filename = f"static/response_{uuid.uuid4().hex}.mp3"
+            filename = f"response_{uuid.uuid4().hex}.mp3"
             with open(filename, "wb") as f:
                 f.write(response.content)
             return filename
@@ -125,41 +119,3 @@ def azure_tts_urdu(text):
     except Exception as e:
         print(f"TTS Exception: {e}")
         return None
-
-# ==== API Route ====
-
-@app.route("/api/mental-health", methods=["POST"])
-def mental_health_api():
-    data = request.get_json()
-    urdu_text = data.get("text", "")
-
-    if not urdu_text:
-        return jsonify({"error": "No Urdu text provided."}), 400
-
-    english_text = translate_urdu_to_english(urdu_text)
-
-    if not english_text.strip():
-        return jsonify({"error": "Failed to translate Urdu to English."}), 500
-
-    if is_query_mental_health_related(english_text):
-        reply_en = generate_response_melogpt(english_text)
-        audio_path = azure_tts_urdu(reply_en)
-    else:
-        reply_en = "I'm sorry! I can only give advice related to mental health."
-        audio_path = azure_tts_urdu(reply_en)
-
-    if audio_path:
-        return jsonify({
-            "urdu_input": urdu_text,
-            "english_translation": english_text,
-            "response_english": reply_en,
-            "audio_file_url": f"/{audio_path}"
-        })
-    else:
-        return jsonify({"error": "Failed to generate Urdu speech."}), 500
-
-# ==== Run Server ====
-if __name__ == "__main__":
-    if not os.path.exists("static"):
-        os.makedirs("static")
-    app.run(host="0.0.0.0", port=5000, debug=True)
