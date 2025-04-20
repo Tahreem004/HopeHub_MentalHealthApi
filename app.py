@@ -36,5 +36,7 @@ def respond():
     else:
         return jsonify({"error": "Failed to generate audio"}), 500
 
+
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=5000)
+
