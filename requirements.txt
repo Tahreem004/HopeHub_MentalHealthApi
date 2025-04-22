@@ -7,5 +7,7 @@ openai
 python-dotenv
 azure-cognitiveservices-speech
 flask-cors
+ffmpeg-python
+azure-cognitiveservices-speech
 pydub
 ffmpeg
