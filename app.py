@@ -37,7 +37,7 @@ def mental_health_voice():
 
     english_text = core_logic.translate_urdu_to_english(urdu_text)
 
-    if core.is_query_mental_health_related(english_text):
+    if core_logic.is_query_mental_health_related(english_text):
         english_response = core_logic.generate_response_melogpt(english_text)
         audio_filename = core_logic.azure_tts_urdu(english_response)
     else:
