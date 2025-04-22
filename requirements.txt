@@ -7,10 +7,10 @@ openai
 python-dotenv
 azure-cognitiveservices-speech
 flask-cors
+git+https://github.com/guillaumekln/faster-whisper.git
 ffmpeg-python
 azure-cognitiveservices-speech
 ctranslate2
 torch
 huggingface_hub
-pydub
-ffmpeg
+
