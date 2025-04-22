@@ -9,7 +9,6 @@ import uuid
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import speech_recognition as sr
-from pydub import AudioSegment  # for format conversion
 import core_logic
 
 app = Flask(__name__)
@@ -29,44 +28,37 @@ def mental_health_voice():
     if "voice" not in request.files:
         return jsonify({"error": "No voice file uploaded"}), 400
 
-    # Save uploaded audio with a unique filename
+    # Save uploaded .wav file directly
     uploaded_file = request.files["voice"]
     unique_id = str(uuid.uuid4())
-    raw_audio_path = f"temp_{unique_id}.wav"
-
-    # Convert to clean WAV format (mono, 16kHz) using pydub
-    try:
-        audio = AudioSegment.from_file(uploaded_file)
-        audio = audio.set_channels(1).set_frame_rate(16000)
-        audio.export(raw_audio_path, format="wav")
-    except Exception as e:
-        return jsonify({"error": f"Audio processing failed: {str(e)}"}), 400
+    audio_path = f"temp_{unique_id}.wav"
+    uploaded_file.save(audio_path)
 
     recognizer = sr.Recognizer()
     try:
-        with sr.AudioFile(raw_audio_path) as source:
+        with sr.AudioFile(audio_path) as source:
             recognizer.adjust_for_ambient_noise(source, duration=0.5)
             audio_data = recognizer.record(source)
         urdu_text = recognizer.recognize_google(audio_data, language="ur-PK")
     except sr.UnknownValueError:
-        os.remove(raw_audio_path)
+        os.remove(audio_path)
         return jsonify({"error": "Could not understand the audio"}), 400
     except sr.RequestError as e:
-        os.remove(raw_audio_path)
+        os.remove(audio_path)
         return jsonify({"error": f"Speech recognition error: {e}"}), 500
 
-    os.remove(raw_audio_path)  # Cleanup temp file
+    os.remove(audio_path)  # Cleanup
 
     print(f"Recognized Urdu text: {urdu_text}")
     english_text = core_logic.translate_urdu_to_english(urdu_text)
 
-    # Generate a response if it's mental health related
+    # Generate response
     if core_logic.is_query_mental_health_related(english_text):
         english_response = core_logic.generate_response(english_text)
     else:
         english_response = "I'm sorry, I can only assist with mental health topics."
 
-    # Generate TTS audio in Urdu
+    # Urdu voice response
     audio_filename = core_logic.azure_tts_urdu(english_response)
 
     return jsonify({
@@ -81,8 +73,9 @@ def serve_audio(filename):
     return send_from_directory(RESPONSE_DIR, filename)
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8080))  # Railway or local default port
+    port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port)
+
 
 
 
