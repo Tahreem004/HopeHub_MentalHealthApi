@@ -6,6 +6,9 @@ WORKDIR /app
 # Copy the current directory contents into the container at /app
 COPY . /app
 
+# Install ffmpeg and other system deps
+RUN apt-get update && apt-get install -y ffmpeg && rm -rf /var/lib/apt/lists/*
+
 # Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
@@ -17,4 +20,6 @@ ENV FLASK_APP=app.py
 
 # Run the Flask app
 CMD ["python", "app.py"]
+
+
 
