@@ -8,6 +8,10 @@ dependencies = [
   "libuuid1"
 ]
 
+[phases.setup]
+aptPkgs = ["git", "ffmpeg"]
+
 [phases.build]
 cmds = ["pip install --upgrade pip", "pip install -r requirements.txt"]
+
 
