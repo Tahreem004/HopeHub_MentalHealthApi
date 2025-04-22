@@ -6,19 +6,19 @@ Created on Sat Apr 19 22:35:10 2025
 """
 import os
 import uuid
-import openai
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import core_logic
+import openai
 
-# Initialize Flask
+# Initialize Flask app
 app = Flask(__name__)
 CORS(app)
 
-# OpenAI API Key (set it via Railway env variable)
-openai.api_key = os.getenv("OPENAI_API_KEY")
+# Set up OpenAI client (new SDK v1+ style)
+client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-# Create folder for audio responses
+# Create responses folder if it doesn't exist
 if not os.path.exists("responses"):
     os.makedirs("responses")
 
@@ -33,23 +33,29 @@ def mental_health_voice():
 
     # Save uploaded audio
     audio_file = request.files["voice"]
-    temp_filename = f"temp_{uuid.uuid4()}.{audio_file.filename.split('.')[-1]}"
+    ext = audio_file.filename.split('.')[-1]
+    temp_filename = f"temp_{uuid.uuid4()}.{ext}"
     audio_path = os.path.join(temp_filename)
     audio_file.save(audio_path)
 
-    # Transcribe using OpenAI Whisper API
+    # Transcribe using OpenAI Whisper (new v1 SDK style)
     try:
         with open(audio_path, "rb") as f:
-            transcript = openai.Audio.transcribe("whisper-1", f, language="ur")
-            urdu_text = transcript["text"]
+            transcript = client.audio.transcriptions.create(
+                model="whisper-1",
+                file=f,
+                language="ur"
+            )
+            urdu_text = transcript.text
     except Exception as e:
         return jsonify({"error": f"Transcription failed: {str(e)}"}), 500
     finally:
-        os.remove(audio_path)  # Clean up temp file
+        if os.path.exists(audio_path):
+            os.remove(audio_path)
 
     print(f"Recognized Urdu: {urdu_text}")
 
-    # Process the text
+    # Translation and mental health logic
     english_text = core_logic.translate_urdu_to_english(urdu_text)
 
     if core_logic.is_query_mental_health_related(english_text):
@@ -72,8 +78,9 @@ def serve_audio(filename):
     return send_from_directory("responses", filename)
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8080))  # Default port for Railway
+    port = int(os.environ.get("PORT", 8080))  # Default for Railway
     app.run(host="0.0.0.0", port=port)
+
 
 
 
