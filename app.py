@@ -4,6 +4,7 @@ Created on Sat Apr 19 22:35:10 2025
 
 @author: tehre
 """
+import speech_recognition as sr
 import os
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
