@@ -5,41 +5,55 @@ Created on Sat Apr 19 22:35:10 2025
 @author: tehre
 """
 
-from flask import Flask, request, jsonify, send_file
-from core_logic import translate_urdu_to_english, is_query_mental_health_related, generate_response, azure_tts_urdu
+
+from flask import Flask, request, jsonify, send_from_directory
+from flask_cors import CORS
+import core
 import os
+import speech_recognition as sr
 
 app = Flask(__name__)
+CORS(app)
 
-@app.route("/classify", methods=["POST"])
-def classify():
-    data = request.json
-    text = data.get("text", "")
-    english = translate_urdu_to_english(text)
-    result = is_query_mental_health_related(english)
-    return jsonify({"mental_health_related": result})
+@app.route("/mental-health-voice", methods=["POST"])
+def mental_health_voice():
+    if "voice" not in request.files:
+        return jsonify({"error": "No voice file uploaded"}), 400
 
-@app.route("/respond", methods=["POST"])
+    audio_file = request.files["voice"]
+    audio_path = os.path.join("temp_audio.wav")
+    audio_file.save(audio_path)
 
-def respond():
-    data = request.json
-    urdu_text = data.get("text", "")
-    english_text = translate_urdu_to_english(urdu_text)
-    
-    if is_query_mental_health_related(english_text):
-        response = generate_response(english_text)
+    # Speech Recognition
+    recognizer = sr.Recognizer()
+    with sr.AudioFile(audio_path) as source:
+        audio = recognizer.record(source)
+    try:
+        urdu_text = recognizer.recognize_google(audio, language="ur-PK")
+    except sr.UnknownValueError:
+        return jsonify({"error": "Could not understand the audio"}), 400
+    except sr.RequestError as e:
+        return jsonify({"error": f"Speech recognition error: {e}"}), 500
+
+    english_text = core.translate_urdu_to_english(urdu_text)
+
+    if core.is_query_mental_health_related(english_text):
+        english_response = core.generate_response_melogpt(english_text)
+        audio_filename = core.azure_tts_urdu(english_response)
     else:
-        response = "میں معذرت کرتا ہوں! میں صرف آپ کی ذہنی صحت سے متعلق مشورے دے سکتا ہوں۔"
-    
-    audio_file = azure_tts_urdu(response)
-    if audio_file:
-        return send_file(audio_file, mimetype="audio/mpeg", as_attachment=True)
-    else:
-        return jsonify({"error": "Failed to generate audio"}), 500
-@app.route("/")
-def index():
-    return "Hello, world!"
+        english_response = "I'm sorry, I can only assist with mental health topics."
+        audio_filename = core.azure_tts_urdu(english_response)
 
+    return jsonify({
+        "urdu_input": urdu_text,
+        "english_translation": english_text,
+        "response": english_response,
+        "audio_file": f"/responses/{audio_filename}" if audio_filename else None
+    })
+
+@app.route("/responses/<filename>")
+def serve_audio(filename):
+    return send_from_directory(core.RESPONSE_DIR, filename)
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))  # default to 8080 for Railway
