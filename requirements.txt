@@ -9,5 +9,8 @@ azure-cognitiveservices-speech
 flask-cors
 ffmpeg-python
 azure-cognitiveservices-speech
+ctranslate2
+torch
+huggingface_hub
 pydub
 ffmpeg
