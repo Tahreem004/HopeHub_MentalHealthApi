@@ -4,56 +4,71 @@ Created on Sat Apr 19 22:35:10 2025
 
 @author: tehre
 """
-import speech_recognition as sr
 import os
+import uuid
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
+import speech_recognition as sr
+from pydub import AudioSegment  # for format conversion
 import core_logic
-import uuid
 
 app = Flask(__name__)
 CORS(app)
 
+# Ensure responses folder exists
+RESPONSE_DIR = "responses"
+if not os.path.exists(RESPONSE_DIR):
+    os.makedirs(RESPONSE_DIR)
+
 @app.route("/")
 def index():
-    return "Hello, world!"
-
-# Folder for saving audio files
-if not os.path.exists("responses"):
-    os.makedirs("responses")
+    return "Mental Health Voice API is running!"
 
 @app.route("/mental-health-voice", methods=["POST"])
 def mental_health_voice():
     if "voice" not in request.files:
         return jsonify({"error": "No voice file uploaded"}), 400
 
-    audio_file = request.files["voice"]
-    audio_path = os.path.join("temp_audio.wav")
-    audio_file.save(audio_path)
+    # Save uploaded audio with a unique filename
+    uploaded_file = request.files["voice"]
+    unique_id = str(uuid.uuid4())
+    raw_audio_path = f"temp_{unique_id}.wav"
 
-    # Speech Recognition
+    # Convert to clean WAV format (mono, 16kHz) using pydub
+    try:
+        audio = AudioSegment.from_file(uploaded_file)
+        audio = audio.set_channels(1).set_frame_rate(16000)
+        audio.export(raw_audio_path, format="wav")
+    except Exception as e:
+        return jsonify({"error": f"Audio processing failed: {str(e)}"}), 400
+
     recognizer = sr.Recognizer()
     try:
-        with sr.AudioFile(audio_path) as source:
-            audio = recognizer.record(source)
-        urdu_text = recognizer.recognize_google(audio, language="ur-PK")
+        with sr.AudioFile(raw_audio_path) as source:
+            recognizer.adjust_for_ambient_noise(source, duration=0.5)
+            audio_data = recognizer.record(source)
+        urdu_text = recognizer.recognize_google(audio_data, language="ur-PK")
     except sr.UnknownValueError:
+        os.remove(raw_audio_path)
         return jsonify({"error": "Could not understand the audio"}), 400
     except sr.RequestError as e:
+        os.remove(raw_audio_path)
         return jsonify({"error": f"Speech recognition error: {e}"}), 500
 
-    print(f"Recognized Urdu text: {urdu_text}")
+    os.remove(raw_audio_path)  # Cleanup temp file
 
+    print(f"Recognized Urdu text: {urdu_text}")
     english_text = core_logic.translate_urdu_to_english(urdu_text)
 
+    # Generate a response if it's mental health related
     if core_logic.is_query_mental_health_related(english_text):
         english_response = core_logic.generate_response(english_text)
-        audio_filename = core_logic.azure_tts_urdu(english_response)
     else:
         english_response = "I'm sorry, I can only assist with mental health topics."
-        audio_filename = core_logic.azure_tts_urdu(english_response)
 
-    # Respond with audio file path
+    # Generate TTS audio in Urdu
+    audio_filename = core_logic.azure_tts_urdu(english_response)
+
     return jsonify({
         "urdu_input": urdu_text,
         "english_translation": english_text,
@@ -63,10 +78,11 @@ def mental_health_voice():
 
 @app.route("/responses/<filename>")
 def serve_audio(filename):
-    return send_from_directory("responses", filename)
-
-
+    return send_from_directory(RESPONSE_DIR, filename)
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8080))  # default to 8080 for Railway
+    port = int(os.environ.get("PORT", 8080))  # Railway or local default port
     app.run(host="0.0.0.0", port=port)
+
+
+
