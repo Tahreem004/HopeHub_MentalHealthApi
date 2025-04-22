@@ -3,83 +3,71 @@
 Created on Sat Apr 19 22:35:10 2025
 
 @author: tehre
-"""
+"""from flask import Flask, request, jsonify, send_file
+from core_logic import (
+    translate_urdu_to_english,
+    is_query_mental_health_related,
+    generate_response,
+    azure_tts_urdu
+)
+from faster_whisper import WhisperModel
 import os
-import uuid
-from flask import Flask, request, jsonify, send_from_directory
-from flask_cors import CORS
-import core_logic
-import openai
+import tempfile
 
-# Initialize Flask app
 app = Flask(__name__)
-CORS(app)
 
-# Set up OpenAI client (new SDK v1+ style)
-client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+# Load Whisper model once at startup
+model_size = os.getenv("WHISPER_MODEL_SIZE", "base")  # default to "base"
+model = WhisperModel(model_size, compute_type="int8")
 
-# Create responses folder if it doesn't exist
-if not os.path.exists("responses"):
-    os.makedirs("responses")
+@app.route("/voice", methods=["POST"])
+def voice():
+    if "audio" not in request.files:
+        return jsonify({"error": "No audio file uploaded"}), 400
+
+    audio_file = request.files["audio"]
+
+    # Save to temporary file (preserve extension for ffmpeg compatibility)
+    extension = os.path.splitext(audio_file.filename)[1]
+    with tempfile.NamedTemporaryFile(delete=False, suffix=extension) as tmp:
+        temp_path = tmp.name
+        audio_file.save(temp_path)
+
+    try:
+        # Transcribe Urdu speech
+        segments, _ = model.transcribe(temp_path, language="ur")
+        transcribed_text = " ".join([segment.text for segment in segments])
+
+        # Translate + process
+        english_text = translate_urdu_to_english(transcribed_text)
+        if is_query_mental_health_related(english_text):
+            response = generate_response(english_text)
+        else:
+            response = "میں معذرت کرتا ہوں! میں صرف آپ کی ذہنی صحت سے متعلق مشورے دے سکتا ہوں۔"
+
+        # Convert to Urdu TTS
+        audio_response = azure_tts_urdu(response)
+        if audio_response:
+            return send_file(audio_response, mimetype="audio/mpeg", as_attachment=True)
+        else:
+            return jsonify({"error": "Failed to generate audio"}), 500
+
+    except Exception as e:
+        print(f"Error handling voice input: {e}")
+        return jsonify({"error": "Internal server error"}), 500
+
+    finally:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
 
 @app.route("/")
 def index():
-    return "Mental Health Chatbot is running."
-
-@app.route("/mental-health-voice", methods=["POST"])
-def mental_health_voice():
-    if "voice" not in request.files:
-        return jsonify({"error": "No voice file uploaded"}), 400
-
-    # Save uploaded audio
-    audio_file = request.files["voice"]
-    ext = audio_file.filename.split('.')[-1]
-    temp_filename = f"temp_{uuid.uuid4()}.{ext}"
-    audio_path = os.path.join(temp_filename)
-    audio_file.save(audio_path)
-
-    # Transcribe using OpenAI Whisper (new v1 SDK style)
-    try:
-        with open(audio_path, "rb") as f:
-            transcript = client.audio.transcriptions.create(
-                model="whisper-1",
-                file=f,
-                language="ur"
-            )
-            urdu_text = transcript.text
-    except Exception as e:
-        return jsonify({"error": f"Transcription failed: {str(e)}"}), 500
-    finally:
-        if os.path.exists(audio_path):
-            os.remove(audio_path)
-
-    print(f"Recognized Urdu: {urdu_text}")
-
-    # Translation and mental health logic
-    english_text = core_logic.translate_urdu_to_english(urdu_text)
-
-    if core_logic.is_query_mental_health_related(english_text):
-        english_response = core_logic.generate_response(english_text)
-    else:
-        english_response = "I'm sorry, I can only assist with mental health topics."
-
-    # Convert response to Urdu speech
-    audio_filename = core_logic.azure_tts_urdu(english_response)
-
-    return jsonify({
-        "urdu_input": urdu_text,
-        "english_translation": english_text,
-        "response": english_response,
-        "audio_file": f"/responses/{audio_filename}" if audio_filename else None
-    })
-
-@app.route("/responses/<filename>")
-def serve_audio(filename):
-    return send_from_directory("responses", filename)
+    return "👋 Mental Health Voice Bot (Urdu) is live!"
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8080))  # Default for Railway
+    port = int(os.environ.get("PORT", 8080))  # Railway will auto-set this
     app.run(host="0.0.0.0", port=port)
+
 
 
 
