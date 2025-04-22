@@ -8,7 +8,7 @@ Created on Sat Apr 19 22:35:10 2025
 
 from flask import Flask, request, jsonify, send_from_directory
 
-import core
+import core_logic
 import os
 import speech_recognition as sr
 
