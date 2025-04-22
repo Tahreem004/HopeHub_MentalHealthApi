@@ -35,14 +35,14 @@ def mental_health_voice():
     except sr.RequestError as e:
         return jsonify({"error": f"Speech recognition error: {e}"}), 500
 
-    english_text = core.translate_urdu_to_english(urdu_text)
+    english_text = core_logic.translate_urdu_to_english(urdu_text)
 
     if core.is_query_mental_health_related(english_text):
-        english_response = core.generate_response_melogpt(english_text)
-        audio_filename = core.azure_tts_urdu(english_response)
+        english_response = core_logic.generate_response_melogpt(english_text)
+        audio_filename = core_logic.azure_tts_urdu(english_response)
     else:
         english_response = "I'm sorry, I can only assist with mental health topics."
-        audio_filename = core.azure_tts_urdu(english_response)
+        audio_filename = core_logic.azure_tts_urdu(english_response)
 
     return jsonify({
         "urdu_input": urdu_text,
@@ -53,7 +53,7 @@ def mental_health_voice():
 
 @app.route("/responses/<filename>")
 def serve_audio(filename):
-    return send_from_directory(core.RESPONSE_DIR, filename)
+    return send_from_directory(core_logic.RESPONSE_DIR, filename)
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))  # default to 8080 for Railway
