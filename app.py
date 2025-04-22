@@ -3,7 +3,8 @@
 Created on Sat Apr 19 22:35:10 2025
 
 @author: tehre
-"""from flask import Flask, request, jsonify, send_file
+"""
+from flask import Flask, request, jsonify, send_file
 from core_logic import (
     translate_urdu_to_english,
     is_query_mental_health_related,
